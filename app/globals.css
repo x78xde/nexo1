@@ -1,26 +1,195 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #111111;
+  --background-elevated: #171717;
+  --background-panel: #1a1a1a;
+  --background-panel-strong: #202020;
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text-primary: #f2f2f2;
+  --text-muted: #b1b1b1;
+  --text-dim: #7b7b7b;
+  --accent: #d4d4d4;
+  --accent-strong: #fafafa;
+  --accent-soft: rgba(255, 255, 255, 0.04);
+  --success: #d4d4d4;
+  --warning: #c8c8c8;
+  --danger: #a1a1a1;
+  --shadow-panel: 0 10px 24px rgba(0, 0, 0, 0.22);
+  --font-sans: "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: #111111;
+  color: var(--text-primary);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans), sans-serif;
+  background: #111111;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.panel {
+  background: var(--background-panel);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-panel);
+}
+
+.panel-strong {
+  background: var(--background-panel-strong);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-panel);
+}
+
+.hairline {
+  position: relative;
+}
+
+.hairline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.metric-glow {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes task-drop {
+  0% {
+    transform: translateY(-6px) scale(0.985);
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0);
+  }
+
+  60% {
+    transform: translateY(0) scale(1.01);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+.project-card {
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+  will-change: transform;
+}
+
+.project-card:hover {
+  transform: translateY(-3px);
+}
+
+.project-card-enter {
+  animation: card-in 320ms ease both;
+}
+
+.project-workspace-enter {
+  animation: rise-in 260ms ease both;
+}
+
+.project-overlay {
+  animation: overlay-in 160ms ease both;
+}
+
+.project-modal {
+  animation: rise-in 220ms ease both;
+}
+
+.project-task-drop {
+  animation: task-drop 260ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-card,
+  .project-card-enter,
+  .project-workspace-enter,
+  .project-overlay,
+  .project-modal,
+  .project-task-drop {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }

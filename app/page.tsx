@@ -1,65 +1,155 @@
-import Image from "next/image";
+"use client";
+
+import {
+  Activity,
+  Cpu,
+  HardDriveDownload,
+} from "lucide-react";
+import MetricCard from "./components/MetricCard";
+
+const recentActivity = [
+  {
+    title: "Nuevo upload en compartidos",
+    detail: "backup-abril.zip se movio a /data/nexo/compartidos",
+    time: "Hace 8 min",
+  },
+  {
+    title: "Tunnel publico activo",
+    detail: "Cloudflare renovado sin abrir puertos del router",
+    time: "Hace 19 min",
+  },
+  {
+    title: "VM ubuntu-dev reiniciada",
+    detail: "Accion manual desde token con permisos acotados",
+    time: "Hace 43 min",
+  },
+];
+
+const storagePools = [
+  { label: "Sistema", value: "34 / 60 GB", width: "57%" },
+  { label: "Documentos", value: "92 / 180 GB", width: "51%" },
+  { label: "Backups", value: "144 / 220 GB", width: "65%" },
+  { label: "Compartidos", value: "18 / 40 GB", width: "45%" },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="space-y-6">
+      <section className="panel rounded-[18px] p-4">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div>
+            <p className="text-[0.68rem] uppercase tracking-[0.2em] text-zinc-500">
+              Resumen
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-zinc-100">
+              Estado general del servidor
+            </h2>
+          </div>
+
+          <div className="grid gap-2 sm:min-w-[280px]">
+            <div className="flex items-center justify-between rounded-xl border border-white/8 bg-[#161616] px-3 py-2.5 text-sm">
+              <span className="text-zinc-400">Uptime</span>
+              <span className="font-mono text-zinc-100">16d 08h 14m</span>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-white/8 bg-[#161616] px-3 py-2.5 text-sm">
+              <span className="text-zinc-400">Tunnel publico</span>
+              <span className="font-mono text-zinc-100">Activo</span>
+            </div>
+            
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <MetricCard
+          title="CPU host"
+          value="27%"
+          change="+4% hoy"
+          icon={Cpu}
+          trend={[52, 58, 76, 34, 61, 18, 18, 41, 49, 23, 54, 42, 9, 22]}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+        <MetricCard
+          title="Memoria"
+          value="8.6 / 16 GB"
+          change="+0.8 GB"
+          icon={Activity}
+          trend={[44, 46, 47, 49, 51, 52, 54, 55, 54, 56, 57, 56, 54, 54]}
+        />
+        <MetricCard
+          title="Almacenamiento"
+          value="268 GB"
+          change="57% libre"
+          icon={HardDriveDownload}
+        />
+      </section>
+
+      
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <div className="grid gap-5">
+          <article className="panel rounded-[18px] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-base font-medium text-zinc-100">
+                  Distribucion del almacenamiento
+                </p>
+              </div>
+              <span className="rounded-full border border-white/8 bg-[#161616] px-3 py-1 text-xs text-zinc-300">
+                470 GB fisicos
+              </span>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              {storagePools.map((pool) => (
+                <div key={pool.label}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-300">{pool.label}</span>
+                    <span className="font-mono text-zinc-400">{pool.value}</span>
+                  </div>
+                  <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#141414]">
+                    <div
+                      className="h-full rounded-full bg-[#717171]"
+                      style={{ width: pool.width }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="grid gap-5">
+          
+          <article className="panel rounded-[18px] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-base font-medium text-zinc-100">
+                  Actividad reciente
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {recentActivity.map((event) => (
+                <div key={event.title} className="flex gap-4">
+                  <div className="mt-1 h-2.5 w-2.5 rounded-full bg-zinc-500" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-zinc-100">
+                        {event.title}
+                      </p>
+                      <span className="text-xs text-zinc-500">{event.time}</span>
+                    </div>
+                    <p className="mt-1 text-sm leading-6 text-zinc-400">
+                      {event.detail}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
         </div>
-      </main>
+      </section>
     </div>
   );
 }
