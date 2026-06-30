@@ -1,13 +1,15 @@
 "use client";
 
 import { Boxes, Cpu, HardDrive, MemoryStick } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import LoginModal from "./LoginModal";
+import RefreshIndicator from "./RefreshIndicator";
 import {
   getProxmoxContainers,
   getStoredToken,
   type ProxmoxGuest,
 } from "../lib/api";
+import { useNexoPolling } from "../lib/useNexoPolling";
 
 const formatBytes = (bytes?: number): string => {
   if (!bytes || bytes <= 0) {
@@ -54,52 +56,23 @@ function ContainerMetric({
 }
 
 export default function ContenedoresWorkspace() {
-  const [containers, setContainers] = useState<ProxmoxGuest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [needsLogin, setNeedsLogin] = useState(false);
+  const [needsLogin, setNeedsLogin] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const enabled = !needsLogin;
 
   useEffect(() => {
-    if (!getStoredToken()) {
-      setNeedsLogin(true);
-      setIsLoading(false);
-      return;
-    }
-
-    let isMounted = true;
-    setIsLoading(true);
-    setError("");
-
-    getProxmoxContainers()
-      .then((items) => {
-        if (!isMounted) {
-          return;
-        }
-
-        setContainers(items);
-        setNeedsLogin(false);
-      })
-      .catch((requestError) => {
-        if (!isMounted) {
-          return;
-        }
-
-        const message =
-          requestError instanceof Error ? requestError.message : "Error al conectar con Nexo Backend";
-        setError(message);
-        setNeedsLogin(message.includes("Token invalido"));
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
+    setNeedsLogin(!getStoredToken());
   }, [refreshKey]);
+
+  const fetchContainers = useCallback(() => getProxmoxContainers(), []);
+  const containersState = useNexoPolling(fetchContainers, { enabled, intervalMs: 15000, refreshKey });
+  const containers = containersState.data ?? [];
+
+  useEffect(() => {
+    if (containersState.error.includes("Token invalido")) {
+      setNeedsLogin(true);
+    }
+  }, [containersState.error]);
 
   const counts = useMemo(
     () => ({
@@ -118,9 +91,15 @@ export default function ContenedoresWorkspace() {
         <section className="panel rounded-[18px] p-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
             <div>
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-zinc-500">
-                Contenedores
-              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-zinc-500">
+                  Contenedores
+                </p>
+                <RefreshIndicator
+                  lastUpdatedAt={containersState.lastUpdatedAt}
+                  isFresh={containersState.isFresh}
+                />
+              </div>
               <h2 className="mt-2 text-2xl font-semibold text-zinc-100">
                 Contenedores LXC de Proxmox
               </h2>
@@ -146,18 +125,18 @@ export default function ContenedoresWorkspace() {
           </div>
         </section>
 
-        {error ? (
+        {containersState.error ? (
           <section className="rounded-[18px] border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-100">
-            {error.includes("Token invalido") ? "Token invalido, volver a iniciar sesion" : "Error al conectar con Nexo Backend"}
+            {containersState.error.includes("Token invalido") ? "Token invalido, volver a iniciar sesion" : "Error al conectar con Nexo Backend"}
           </section>
         ) : null}
 
         <section className="panel rounded-[18px] p-4">
-          {isLoading ? (
+          {containersState.isLoading ? (
             <div className="text-sm text-zinc-400">Cargando...</div>
           ) : null}
 
-          {!isLoading && containers.length === 0 ? (
+          {!containersState.isLoading && containers.length === 0 ? (
             <div className="rounded-[18px] border border-dashed border-white/10 bg-[#101010] px-4 py-12 text-center">
               <Boxes className="mx-auto h-7 w-7 text-zinc-600" />
               <p className="mt-3 text-sm text-zinc-400">No hay contenedores LXC disponibles.</p>

@@ -1,13 +1,15 @@
 "use client";
 
 import { Cpu, HardDrive, MemoryStick, Server } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import LoginModal from "./LoginModal";
+import RefreshIndicator from "./RefreshIndicator";
 import {
   getProxmoxVMs,
   getStoredToken,
   type ProxmoxGuest,
 } from "../lib/api";
+import { useNexoPolling } from "../lib/useNexoPolling";
 
 const formatBytes = (bytes?: number): string => {
   if (!bytes || bytes <= 0) {
@@ -54,52 +56,23 @@ function VmMetric({
 }
 
 export default function MaquinasVirtualesWorkspace() {
-  const [vms, setVms] = useState<ProxmoxGuest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [needsLogin, setNeedsLogin] = useState(false);
+  const [needsLogin, setNeedsLogin] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const enabled = !needsLogin;
 
   useEffect(() => {
-    if (!getStoredToken()) {
-      setNeedsLogin(true);
-      setIsLoading(false);
-      return;
-    }
-
-    let isMounted = true;
-    setIsLoading(true);
-    setError("");
-
-    getProxmoxVMs()
-      .then((items) => {
-        if (!isMounted) {
-          return;
-        }
-
-        setVms(items);
-        setNeedsLogin(false);
-      })
-      .catch((requestError) => {
-        if (!isMounted) {
-          return;
-        }
-
-        const message =
-          requestError instanceof Error ? requestError.message : "Error al conectar con Nexo Backend";
-        setError(message);
-        setNeedsLogin(message.includes("Token invalido"));
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
+    setNeedsLogin(!getStoredToken());
   }, [refreshKey]);
+
+  const fetchVms = useCallback(() => getProxmoxVMs(), []);
+  const vmsState = useNexoPolling(fetchVms, { enabled, intervalMs: 15000, refreshKey });
+  const vms = vmsState.data ?? [];
+
+  useEffect(() => {
+    if (vmsState.error.includes("Token invalido")) {
+      setNeedsLogin(true);
+    }
+  }, [vmsState.error]);
 
   const counts = useMemo(
     () => ({
@@ -118,9 +91,12 @@ export default function MaquinasVirtualesWorkspace() {
         <section className="panel rounded-[18px] p-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-zinc-500">
-                Proxmox
-              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-[0.68rem] uppercase tracking-[0.2em] text-zinc-500">
+                  Proxmox
+                </p>
+                <RefreshIndicator lastUpdatedAt={vmsState.lastUpdatedAt} isFresh={vmsState.isFresh} />
+              </div>
               <h2 className="mt-2 text-2xl font-semibold text-zinc-100">
                 Control de maquinas virtuales
               </h2>
@@ -146,18 +122,18 @@ export default function MaquinasVirtualesWorkspace() {
           </div>
         </section>
 
-        {error ? (
+        {vmsState.error ? (
           <section className="rounded-[18px] border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-100">
-            {error.includes("Token invalido") ? "Token invalido, volver a iniciar sesion" : "Error al conectar con Nexo Backend"}
+            {vmsState.error.includes("Token invalido") ? "Token invalido, volver a iniciar sesion" : "Error al conectar con Nexo Backend"}
           </section>
         ) : null}
 
         <section className="panel rounded-[18px] p-4">
-          {isLoading ? (
+          {vmsState.isLoading ? (
             <div className="text-sm text-zinc-400">Cargando...</div>
           ) : null}
 
-          {!isLoading && vms.length === 0 ? (
+          {!vmsState.isLoading && vms.length === 0 ? (
             <div className="rounded-[18px] border border-dashed border-white/10 bg-[#101010] px-4 py-10 text-center text-sm text-zinc-500">
               No hay maquinas virtuales disponibles.
             </div>

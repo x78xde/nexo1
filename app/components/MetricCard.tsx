@@ -35,7 +35,7 @@ export default function MetricCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-zinc-400">{title}</p>
-          <p className="mt-2 text-[1.85rem] font-semibold tracking-tight text-zinc-100">
+          <p className="mt-2 text-[1.85rem] font-semibold tracking-tight text-zinc-100 transition-all duration-500">
             {value}
           </p>
         </div>
@@ -50,7 +50,7 @@ export default function MetricCard({
             {normalizedTrend.map((point, index) => (
               <span
                 key={`${title}-trend-${index}`}
-                className="w-2 rounded-[2px] bg-zinc-300/90"
+                className="w-2 rounded-[2px] bg-zinc-300/90 transition-all duration-500"
                 style={{ height: `${point}%` }}
               />
             ))}

@@ -60,6 +60,17 @@ export type ProxmoxNode = {
   disk?: number;
 };
 
+export type ProxmoxStorage = {
+  storage: string;
+  type?: string;
+  active?: number;
+  enabled?: number;
+  total?: number;
+  used?: number;
+  avail?: number;
+  content?: string;
+};
+
 export type ProxmoxGuest = {
   id: string;
   vmid: number;
@@ -96,6 +107,14 @@ type LoginFailure = {
   success: false;
   message: string;
 };
+
+type CacheEntry<T> = {
+  data?: T;
+  timestamp: number;
+  promise?: Promise<T>;
+};
+
+const requestCache = new Map<string, CacheEntry<unknown>>();
 
 export class NexoApiError extends Error {
   status: number;
@@ -164,6 +183,40 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return payload.data;
 }
 
+async function cachedRequest<T>(path: string, maxAgeMs: number): Promise<T> {
+  const now = Date.now();
+  const cached = requestCache.get(path) as CacheEntry<T> | undefined;
+
+  if (cached?.promise) {
+    return cached.promise;
+  }
+
+  if (cached?.data !== undefined && now - cached.timestamp < maxAgeMs) {
+    return cached.data;
+  }
+
+  const promise = request<T>(path)
+    .then((data) => {
+      requestCache.set(path, {
+        data,
+        timestamp: Date.now(),
+      });
+      return data;
+    })
+    .catch((error) => {
+      requestCache.delete(path);
+      throw error;
+    });
+
+  requestCache.set(path, {
+    data: cached?.data,
+    timestamp: cached?.timestamp ?? 0,
+    promise,
+  });
+
+  return promise;
+}
+
 export async function login(username: string, password: string): Promise<LoginResult> {
   const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
     method: "POST",
@@ -190,9 +243,13 @@ export async function login(username: string, password: string): Promise<LoginRe
 }
 
 export const getBackendStatus = () => request<BackendStatus>("/");
-export const getSystemHealth = () => request<SystemHealth>("/api/system/health");
-export const getSystemMetrics = () => request<SystemMetrics>("/api/system/metrics");
-export const getProxmoxVersion = () => request<ProxmoxVersion>("/api/proxmox/version");
-export const getProxmoxNodes = () => request<ProxmoxNode[]>("/api/proxmox/nodes");
-export const getProxmoxVMs = () => request<ProxmoxGuest[]>("/api/proxmox/vms");
-export const getProxmoxContainers = () => request<ProxmoxGuest[]>("/api/proxmox/containers");
+export const getSystemHealth = () => cachedRequest<SystemHealth>("/api/system/health", 5000);
+export const getSystemMetrics = () => cachedRequest<SystemMetrics>("/api/system/metrics", 5000);
+export const getProxmoxVersion = () =>
+  cachedRequest<ProxmoxVersion>("/api/proxmox/version", Number.POSITIVE_INFINITY);
+export const getProxmoxNodes = () => cachedRequest<ProxmoxNode[]>("/api/proxmox/nodes", 10000);
+export const getProxmoxStorage = () =>
+  cachedRequest<ProxmoxStorage[]>("/api/proxmox/storage", 30000);
+export const getProxmoxVMs = () => cachedRequest<ProxmoxGuest[]>("/api/proxmox/vms", 15000);
+export const getProxmoxContainers = () =>
+  cachedRequest<ProxmoxGuest[]>("/api/proxmox/containers", 15000);
