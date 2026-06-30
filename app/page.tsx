@@ -1,155 +1,282 @@
 "use client";
 
-import {
-  Activity,
-  Cpu,
-  HardDriveDownload,
-} from "lucide-react";
+import { Activity, Cpu, HardDriveDownload, Server } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import LoginModal from "./components/LoginModal";
 import MetricCard from "./components/MetricCard";
+import {
+  getBackendStatus,
+  getProxmoxContainers,
+  getProxmoxNodes,
+  getProxmoxVersion,
+  getProxmoxVMs,
+  getStoredToken,
+  getSystemHealth,
+  getSystemMetrics,
+  type BackendStatus,
+  type ProxmoxGuest,
+  type ProxmoxNode,
+  type ProxmoxVersion,
+  type SystemHealth,
+  type SystemMetrics,
+} from "./lib/api";
 
-const recentActivity = [
-  {
-    title: "Nuevo upload en compartidos",
-    detail: "backup-abril.zip se movio a /data/nexo/compartidos",
-    time: "Hace 8 min",
-  },
-  {
-    title: "Tunnel publico activo",
-    detail: "Cloudflare renovado sin abrir puertos del router",
-    time: "Hace 19 min",
-  },
-  {
-    title: "VM ubuntu-dev reiniciada",
-    detail: "Accion manual desde token con permisos acotados",
-    time: "Hace 43 min",
-  },
-];
+type DashboardData = {
+  backend: BackendStatus;
+  health: SystemHealth;
+  metrics: SystemMetrics;
+  version: ProxmoxVersion;
+  nodes: ProxmoxNode[];
+  vms: ProxmoxGuest[];
+  containers: ProxmoxGuest[];
+};
 
-const storagePools = [
-  { label: "Sistema", value: "34 / 60 GB", width: "57%" },
-  { label: "Documentos", value: "92 / 180 GB", width: "51%" },
-  { label: "Backups", value: "144 / 220 GB", width: "65%" },
-  { label: "Compartidos", value: "18 / 40 GB", width: "45%" },
-];
+const formatBytes = (bytes?: number): string => {
+  if (!bytes || bytes <= 0) {
+    return "0 GB";
+  }
+
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+};
+
+const formatUptime = (seconds: number): string => {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+
+  return `${hours}h ${minutes}m`;
+};
+
+const percent = (used?: number, total?: number): number => {
+  if (!used || !total || total <= 0) {
+    return 0;
+  }
+
+  return Math.round((used / total) * 100);
+};
 
 export default function Home() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [needsLogin, setNeedsLogin] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const token = getStoredToken();
+
+    if (!token) {
+      setNeedsLogin(true);
+      setIsLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoading(true);
+    setError("");
+
+    Promise.all([
+      getBackendStatus(),
+      getSystemHealth(),
+      getSystemMetrics(),
+      getProxmoxVersion(),
+      getProxmoxNodes(),
+      getProxmoxVMs(),
+      getProxmoxContainers(),
+    ])
+      .then(([backend, health, metrics, version, nodes, vms, containers]) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setData({ backend, health, metrics, version, nodes, vms, containers });
+        setNeedsLogin(false);
+      })
+      .catch((requestError) => {
+        if (!isMounted) {
+          return;
+        }
+
+        const message =
+          requestError instanceof Error ? requestError.message : "Error al conectar con Nexo Backend";
+        setError(message);
+        setNeedsLogin(message.includes("Token invalido"));
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshKey]);
+
+  const primaryNode = data?.nodes[0] ?? null;
+  const nodeMemoryUsage = percent(primaryNode?.mem, primaryNode?.maxmem);
+  const nodeDiskUsage = percent(primaryNode?.disk, primaryNode?.maxdisk);
+  const nodeCpuUsage = primaryNode?.cpu ? Math.round(primaryNode.cpu * 100) : data?.metrics.cpu.usage ?? 0;
+
+  const storageRows = useMemo(
+    () => [
+      {
+        label: "RAM nodo",
+        value: `${formatBytes(primaryNode?.mem)} / ${formatBytes(primaryNode?.maxmem)}`,
+        width: `${nodeMemoryUsage}%`,
+      },
+      {
+        label: "Disco nodo",
+        value: `${formatBytes(primaryNode?.disk)} / ${formatBytes(primaryNode?.maxdisk)}`,
+        width: `${nodeDiskUsage}%`,
+      },
+      {
+        label: "RAM sistema",
+        value: data
+          ? `${formatBytes(data.metrics.memory.used)} / ${formatBytes(data.metrics.memory.total)}`
+          : "0 GB / 0 GB",
+        width: `${data?.metrics.memory.usage ?? 0}%`,
+      },
+    ],
+    [data, nodeDiskUsage, nodeMemoryUsage, primaryNode],
+  );
+
   return (
-    <div className="space-y-6">
-      <section className="panel rounded-[18px] p-4">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div>
-            <p className="text-[0.68rem] uppercase tracking-[0.2em] text-zinc-500">
-              Resumen
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-zinc-100">
-              Estado general del servidor
-            </h2>
-          </div>
+    <>
+      {needsLogin ? <LoginModal onLogin={() => setRefreshKey((current) => current + 1)} /> : null}
 
-          <div className="grid gap-2 sm:min-w-[280px]">
-            <div className="flex items-center justify-between rounded-xl border border-white/8 bg-[#161616] px-3 py-2.5 text-sm">
-              <span className="text-zinc-400">Uptime</span>
-              <span className="font-mono text-zinc-100">16d 08h 14m</span>
+      <div className="space-y-6">
+        <section className="panel rounded-[18px] p-4">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div>
+              <p className="text-[0.68rem] uppercase tracking-[0.2em] text-zinc-500">
+                Resumen
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-zinc-100">
+                Estado general del servidor
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                Lecturas reales desde Nexo Backend, Proxmox y el sistema local.
+              </p>
             </div>
-            <div className="flex items-center justify-between rounded-xl border border-white/8 bg-[#161616] px-3 py-2.5 text-sm">
-              <span className="text-zinc-400">Tunnel publico</span>
-              <span className="font-mono text-zinc-100">Activo</span>
+
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between rounded-xl border border-white/8 bg-[#161616] px-3 py-2.5 text-sm">
+                <span className="text-zinc-400">Backend</span>
+                <span className="font-mono text-zinc-100">
+                  {isLoading ? "Cargando..." : data?.backend.status ?? "Sin conexion"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-white/8 bg-[#161616] px-3 py-2.5 text-sm">
+                <span className="text-zinc-400">Proxmox</span>
+                <span className="font-mono text-zinc-100">
+                  {data ? `${data.version.version} (${data.version.release ?? "release"})` : "Cargando..."}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-white/8 bg-[#161616] px-3 py-2.5 text-sm">
+                <span className="text-zinc-400">Uptime</span>
+                <span className="font-mono text-zinc-100">
+                  {data ? formatUptime(data.health.uptime) : "Cargando..."}
+                </span>
+              </div>
             </div>
-            
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <MetricCard
-          title="CPU host"
-          value="27%"
-          change="+4% hoy"
-          icon={Cpu}
-          trend={[52, 58, 76, 34, 61, 18, 18, 41, 49, 23, 54, 42, 9, 22]}
-        />
-        <MetricCard
-          title="Memoria"
-          value="8.6 / 16 GB"
-          change="+0.8 GB"
-          icon={Activity}
-          trend={[44, 46, 47, 49, 51, 52, 54, 55, 54, 56, 57, 56, 54, 54]}
-        />
-        <MetricCard
-          title="Almacenamiento"
-          value="268 GB"
-          change="57% libre"
-          icon={HardDriveDownload}
-        />
-      </section>
+        {error ? (
+          <section className="rounded-[18px] border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-100">
+            {error.includes("Token invalido") ? "Token invalido, volver a iniciar sesion" : "Error al conectar con Nexo Backend"}
+          </section>
+        ) : null}
 
-      
+        {isLoading ? (
+          <section className="panel rounded-[18px] p-4 text-sm text-zinc-400">Cargando...</section>
+        ) : null}
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-        <div className="grid gap-5">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <MetricCard
+            title="CPU nodo"
+            value={`${nodeCpuUsage}%`}
+            change={`${primaryNode?.maxcpu ?? data?.metrics.cpu.cores ?? 0} cores`}
+            icon={Cpu}
+            trend={[nodeCpuUsage, nodeCpuUsage + 4, nodeCpuUsage + 8, nodeCpuUsage + 2, nodeCpuUsage]}
+          />
+          <MetricCard
+            title="Memoria nodo"
+            value={`${formatBytes(primaryNode?.mem)} / ${formatBytes(primaryNode?.maxmem)}`}
+            change={`${nodeMemoryUsage}% usado`}
+            icon={Activity}
+            trend={[nodeMemoryUsage, nodeMemoryUsage + 1, nodeMemoryUsage + 2, nodeMemoryUsage]}
+          />
+          <MetricCard
+            title="Disco nodo"
+            value={`${formatBytes(primaryNode?.disk)} / ${formatBytes(primaryNode?.maxdisk)}`}
+            change={`${nodeDiskUsage}% usado`}
+            icon={HardDriveDownload}
+          />
+        </section>
+
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
           <article className="panel rounded-[18px] p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-base font-medium text-zinc-100">
-                  Distribucion del almacenamiento
+                <p className="text-base font-medium text-zinc-100">Nodo Proxmox</p>
+                <p className="mt-1 text-sm text-zinc-500">
+                  {primaryNode ? `${primaryNode.node} - ${primaryNode.status}` : "Sin nodo detectado"}
                 </p>
               </div>
               <span className="rounded-full border border-white/8 bg-[#161616] px-3 py-1 text-xs text-zinc-300">
-                470 GB fisicos
+                {data?.nodes.length ?? 0} nodo(s)
               </span>
             </div>
 
             <div className="mt-6 space-y-4">
-              {storagePools.map((pool) => (
-                <div key={pool.label}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-300">{pool.label}</span>
-                    <span className="font-mono text-zinc-400">{pool.value}</span>
+              {storageRows.map((row) => (
+                <div key={row.label}>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-zinc-300">{row.label}</span>
+                    <span className="font-mono text-zinc-400">{row.value}</span>
                   </div>
                   <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-[#141414]">
-                    <div
-                      className="h-full rounded-full bg-[#717171]"
-                      style={{ width: pool.width }}
-                    />
+                    <div className="h-full rounded-full bg-[#717171]" style={{ width: row.width }} />
                   </div>
                 </div>
               ))}
             </div>
           </article>
-        </div>
 
-        <div className="grid gap-5">
-          
           <article className="panel rounded-[18px] p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-base font-medium text-zinc-100">
-                  Actividad reciente
-                </p>
+                <p className="text-base font-medium text-zinc-100">Inventario real</p>
+                <p className="mt-1 text-sm text-zinc-500">Recursos detectados por Proxmox</p>
+              </div>
+              <Server className="h-5 w-5 text-zinc-500" />
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              <div className="flex items-center justify-between rounded-xl border border-white/8 bg-[#161616] px-3 py-3 text-sm">
+                <span className="text-zinc-400">Maquinas virtuales</span>
+                <span className="font-mono text-zinc-100">{data?.vms.length ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-white/8 bg-[#161616] px-3 py-3 text-sm">
+                <span className="text-zinc-400">Contenedores LXC</span>
+                <span className="font-mono text-zinc-100">{data?.containers.length ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-white/8 bg-[#161616] px-3 py-3 text-sm">
+                <span className="text-zinc-400">Ultima lectura</span>
+                <span className="font-mono text-zinc-100">
+                  {data ? new Date(data.health.timestamp).toLocaleTimeString() : "--:--"}
+                </span>
               </div>
             </div>
-
-            <div className="mt-5 space-y-4">
-              {recentActivity.map((event) => (
-                <div key={event.title} className="flex gap-4">
-                  <div className="mt-1 h-2.5 w-2.5 rounded-full bg-zinc-500" />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-zinc-100">
-                        {event.title}
-                      </p>
-                      <span className="text-xs text-zinc-500">{event.time}</span>
-                    </div>
-                    <p className="mt-1 text-sm leading-6 text-zinc-400">
-                      {event.detail}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
           </article>
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </>
   );
 }
